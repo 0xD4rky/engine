@@ -1,0 +1,15 @@
+sampling_params:
+  temperature: 0.5
+  top_p: 0.6
+  top_k: 50
+  max_new_tokens: 1024
+  repetition_penalty: 1
+
+speculative_params:
+  max_speculative_tokens: 1024
+  repetition_penalty: 1
+
+batch_params:
+  batch_size: 16
+  num_workers: 4
+  pin_memory: true
