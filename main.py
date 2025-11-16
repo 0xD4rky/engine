@@ -1,6 +1,9 @@
+from typing import Any
+
 import torch
 import numpy as np
 import yaml
+from tqdm import tqdm
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
@@ -25,7 +28,7 @@ tokenizer = AutoTokenizer.from_pretrained(config["model_name"])
 
 gsm8k_inference = GSM8KInference(model_name=config["model_name"])
 
-dataset = gsm8k_inference.load_gsm8k()
+dataset = list(gsm8k_inference.load_gsm8k())
 
 BATCH_SIZE = config["batch_params"]["batch_size"]
 NUM_WORKERS = config["batch_params"]["num_workers"]
@@ -38,7 +41,9 @@ def chunked(xs, n):
 all_results = []
 all_metrics = []
 
-for batch in chunked(dataset, BATCH_SIZE):
+total_batches = (len(dataset) + BATCH_SIZE - 1) // BATCH_SIZE
+
+for batch in tqdm(chunked(dataset, BATCH_SIZE), total=total_batches, desc="Processing batches"):
     prompts = [gsm8k_inference.format_prompt(example["question"]) for example in batch]
     encoded_prompts = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, add_special_tokens=True)
 
@@ -65,9 +70,9 @@ for batch in chunked(dataset, BATCH_SIZE):
     })
     
 
-print(f"all {len(all_results)} datapoints done")
-print(f"avg ttft: {np.mean(all_metrics['ttft']):.3f}s")
-print(f"avg latency: {np.mean(all_metrics['total_latency']):.3f}s")
-print(f"avg throughput: {np.mean(all_metrics['throughput']):.2f} tok/s")
+print(f"\nall {len(all_results)} datapoints done")
+print(f"avg ttft: {np.mean([m['ttft'] for m in all_metrics]):.3f}s")
+print(f"avg latency: {np.mean([m['total_latency'] for m in all_metrics]):.3f}s")
+print(f"avg throughput: {np.mean([m['throughput'] for m in all_metrics]):.2f} tok/s")
 
 

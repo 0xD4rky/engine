@@ -13,3 +13,5 @@ batch_params:
   batch_size: 16
   num_workers: 4
   pin_memory: true
+
+model_name: "Qwen/Qwen2.5-3B"
