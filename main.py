@@ -6,12 +6,13 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from benchmark.data import GSM8KInference
 
-config = yaml.load(open("inference/config.yaml"), Loader=yaml.FullLoader)
+config = yaml.load(open("/Users/ishaankumar/Documents/engine/inference/confing.yaml"), Loader=yaml.FullLoader)
 
 model = AutoModelForCausalLM.from_pretrained(
     "qwen/Qwen2.5-3B-Instruct",
     torch_dtype=torch.float16,
     device_map="mps"
+    
 )
 
 tokenizer = AutoTokenizer.from_pretrained(config["model_name"])
@@ -66,9 +67,9 @@ for batch in chunked(dataset, BATCH_SIZE):
     })
     
 
-print(f"Processed {len(all_results)} examples")
-print(f"Average TTFT: {np.mean(all_metrics['ttft']):.3f}s")
-print(f"Average Latency: {np.mean(all_metrics['total_latency']):.3f}s")
-print(f"Average Throughput: {np.mean(all_metrics['throughput']):.2f} tok/s")
+print(f"all {len(all_results)} datapoints done")
+print(f"avg ttft: {np.mean(all_metrics['ttft']):.3f}s")
+print(f"avg latency: {np.mean(all_metrics['total_latency']):.3f}s")
+print(f"avg throughput: {np.mean(all_metrics['throughput']):.2f} tok/s")
 
 

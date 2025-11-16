@@ -2,7 +2,7 @@ import torch
 import yaml
 from utils.processor import Processor, GreedyProcessor
 
-config = yaml.load(open("inference/config.yaml"), Loader=yaml.FullLoader)
+config = yaml.load(open("/Users/ishaankumar/Documents/engine/inference/confing.yaml"), Loader=yaml.FullLoader)
 
 @torch.no_grad()
 def base_decoding_without_kv_cache(

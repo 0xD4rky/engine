@@ -10,7 +10,7 @@ import yaml
 
 from inference.base_decoding import base_decoding_without_kv_cache
 
-config = yaml.load(open("inference/config.yaml"), Loader=yaml.FullLoader)
+config = yaml.load(open("/Users/ishaankumar/Documents/engine/inference/confing.yaml"), Loader=yaml.FullLoader)
 
 @dataclass
 class Metrics:
@@ -91,7 +91,8 @@ Answer: Let's solve this step by step:
         tokens_generated = output_ids.shape[1]
         throughput = tokens_generated / total_latency if total_latency > 0 else 0
 
-        metrics = Metrics(
+        # for each indv batch
+        metrics = Metrics( 
             ttft=ttft,
             total_latency=total_latency,
             tokens_generated=tokens_generated,
