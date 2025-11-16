@@ -6,14 +6,20 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from benchmark.data import GSM8KInference
 
+def get_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
 config = yaml.load(open("/Users/ishaankumar/Documents/engine/inference/confing.yaml"), Loader=yaml.FullLoader)
 
 model = AutoModelForCausalLM.from_pretrained(
-    "qwen/Qwen2.5-3B-Instruct",
-    torch_dtype=torch.float16,
-    device_map="mps"
-    
-)
+    config["model_name"],
+    torch_dtype=torch.float16
+).to(get_device())
 
 tokenizer = AutoTokenizer.from_pretrained(config["model_name"])
 
@@ -28,14 +34,6 @@ PIN_MEMORY = config["batch_params"]["pin_memory"]
 def chunked(xs, n):
     for i in range(0, len(xs), n):
         yield xs[i:i+n]
-
-def get_device():
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        return torch.device("mps")
-    else:
-        return torch.device("cpu")
 
 all_results = []
 all_metrics = []
