@@ -2,7 +2,7 @@ import torch
 import yaml
 from utils.processor import Processor, GreedyProcessor
 
-config = yaml.load(open("/Users/ishaankumar/Documents/engine/inference/confing.yaml"), Loader=yaml.FullLoader)
+config = yaml.load(open("engine/inference/confing.yaml"), Loader=yaml.FullLoader)
 
 def _true_lengths(attn_mask: torch.Tensor) -> torch.Tensor:
     return attn_mask.sum(dim=1) # true sequence lengths from an attention mask (1 for tokens, 0 for pad)

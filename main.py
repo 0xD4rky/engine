@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-from benchmark.data import GSM8KInference
+from benchmark.gsm8k import GSM8KInference
 
 def get_device():
     if torch.cuda.is_available():
@@ -17,7 +17,7 @@ def get_device():
     else:
         return torch.device("cpu")
 
-config = yaml.load(open("/Users/ishaankumar/Documents/engine/inference/confing.yaml"), Loader=yaml.FullLoader)
+config = yaml.load(open("engine/inference/confing.yaml"), Loader=yaml.FullLoader)
 
 model = AutoModelForCausalLM.from_pretrained(
     config["model_name"],

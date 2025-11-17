@@ -10,7 +10,7 @@ import yaml
 
 from inference.base_decoding import base_decoding_without_kv_cache
 
-config = yaml.load(open("/Users/ishaankumar/Documents/engine/inference/confing.yaml"), Loader=yaml.FullLoader)
+config = yaml.load(open("engine/inference/confing.yaml"), Loader=yaml.FullLoader)
 
 @dataclass
 class Metrics:
@@ -101,8 +101,6 @@ Answer: Let's solve this step by step:
 
         return output_ids, metrics
     
-    def generate_response_with_speculative_decoding(
-    ):
 
         
 
