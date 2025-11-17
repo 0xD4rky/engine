@@ -8,8 +8,8 @@ config = yaml.load(open("/Users/ishaankumar/Documents/engine/inference/confing.y
 def base_decoding_without_kv_cache(
     model,
     tokenizer,
-    input_ids: torch.Tensor,
-    attn_mask: torch.Tensor,
+    input_ids: torch.Tensor, # tokenized input ids
+    attn_mask: torch.Tensor, 
     processor: Processor = GreedyProcessor(),
     max_new_tokens: int = config["sampling_params"]["max_new_tokens"]
 ) -> torch.Tensor:

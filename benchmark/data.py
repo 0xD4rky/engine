@@ -66,7 +66,7 @@ Answer: Let's solve this step by step:
         return ""
     
     @torch.no_grad()
-    def generate_response(
+    def generate_response_with_base_decoding(
         self,
         input_ids: torch.Tensor,
         attn_mask: torch.Tensor,
@@ -100,6 +100,11 @@ Answer: Let's solve this step by step:
         )
 
         return output_ids, metrics
+    
+    def generate_response_with_speculative_decoding(
+    ):
+
+        
 
 
 

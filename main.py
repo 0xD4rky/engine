@@ -43,36 +43,39 @@ all_metrics = []
 
 total_batches = (len(dataset) + BATCH_SIZE - 1) // BATCH_SIZE
 
-for batch in tqdm(chunked(dataset, BATCH_SIZE), total=total_batches, desc="Processing batches"):
-    prompts = [gsm8k_inference.format_prompt(example["question"]) for example in batch]
-    encoded_prompts = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, add_special_tokens=True)
+def base_decoding_benchmark():
+    for batch in tqdm(chunked(dataset, BATCH_SIZE), total=total_batches, desc="Processing batches"):
+        prompts = [gsm8k_inference.format_prompt(example["question"]) for example in batch]
+        encoded_prompts = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, add_special_tokens=True)
 
-    input_ids = encoded_prompts["input_ids"].to(get_device())
-    attn_mask = encoded_prompts["attention_mask"].to(get_device())
+        input_ids = encoded_prompts["input_ids"].to(get_device())
+        attn_mask = encoded_prompts["attention_mask"].to(get_device())
 
-    output_ids, metrics = gsm8k_inference.generate_response(input_ids, attn_mask)
+        output_ids, metrics = gsm8k_inference.generate_response_with_base_decoding(input_ids, attn_mask)
 
-    responses = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-    
-    for example, response in zip(batch, responses):
-        result = {
-            "question": example["question"],
-            "answer": example["answer"],
-            "generated": response
-        }
-        all_results.append(result)
-    
-    all_metrics.append({
-        "ttft": metrics.ttft,
-        "total_latency": metrics.total_latency,
-        "tokens_generated": metrics.tokens_generated,
-        "throughput": metrics.throughput
-    })
-    
+        responses = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+        
+        for example, response in zip(batch, responses):
+            result = {
+                "question": example["question"],
+                "answer": example["answer"],
+                "generated": response
+            }
+            all_results.append(result)
+        
+        all_metrics.append({
+            "ttft": metrics.ttft,
+            "total_latency": metrics.total_latency,
+            "tokens_generated": metrics.tokens_generated,
+            "throughput": metrics.throughput
+        })
+        
 
-print(f"\nall {len(all_results)} datapoints done")
-print(f"avg ttft: {np.mean([m['ttft'] for m in all_metrics]):.3f}s")
-print(f"avg latency: {np.mean([m['total_latency'] for m in all_metrics]):.3f}s")
-print(f"avg throughput: {np.mean([m['throughput'] for m in all_metrics]):.2f} tok/s")
+    print(f"\nall {len(all_results)} datapoints done")
+    print(f"avg ttft: {np.mean([m['ttft'] for m in all_metrics]):.3f}s")
+    print(f"avg latency: {np.mean([m['total_latency'] for m in all_metrics]):.3f}s")
+    print(f"avg throughput: {np.mean([m['throughput'] for m in all_metrics]):.2f} tok/s")
 
+def speculative_decoding_benchmark():
+    pass
 

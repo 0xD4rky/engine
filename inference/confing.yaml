@@ -6,7 +6,7 @@ sampling_params:
   repetition_penalty: 1
 
 speculative_params:
-  max_speculative_tokens: 1024
+  max_speculative_tokens: 8
   repetition_penalty: 1
 
 batch_params:
