@@ -143,3 +143,12 @@ def speculative_decoding_benchmark():
 
     _summarize_metrics(metrics_log, "speculative decoding")
     return results, metrics_log
+
+if __name__ == "__main__":
+    base_results, base_metrics = base_decoding_benchmark()
+    speculative_results, speculative_metrics = speculative_decoding_benchmark()
+
+    print(base_results)
+    print(base_metrics)
+    print(speculative_results)
+    print(speculative_metrics)
