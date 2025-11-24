@@ -1,8 +1,10 @@
+from pathlib import Path
 import torch
 import yaml
 from utils.processor import Processor, GreedyProcessor
 
-config = yaml.load(open("engine/inference/confing.yaml"), Loader=yaml.FullLoader)
+_CONFIG_PATH = Path(__file__).resolve().parent / "inference" / "confing.yaml"
+config = yaml.load(open(_CONFIG_PATH, "r"), Loader=yaml.FullLoader)
 
 def _true_lengths(attn_mask: torch.Tensor) -> torch.Tensor:
     return attn_mask.sum(dim=1) # true sequence lengths from an attention mask (1 for tokens, 0 for pad)
@@ -59,11 +61,20 @@ def speculative_decoding_without_kv_cache(
         speculative_ids = current_sequence
         speculative_mask = current_mask
 
+        draft_model.eval()
+        target_model.eval()
+
         for _ in range(step_budget):
             if not active.any():
                 break
-
-            draft_outputs = draft_model(input_ids=speculative_ids, attention_mask=speculative_mask)
+            
+            with torch.inference_mode():
+                draft_outputs = draft_model(
+                    input_ids=speculative_ids, 
+                    attention_mask=speculative_mask, 
+                    output_hidden_states=False,
+                    output_attentions=False
+                )
             draft_logits = draft_outputs.logits[:, -1, :]
             draft_probs = processor(draft_logits)
             next_token = processor.sample(draft_probs).squeeze(-1)
@@ -94,7 +105,13 @@ def speculative_decoding_without_kv_cache(
         draft_block_probs = torch.cat(draft_prob_columns, dim=1).clamp_min(1e-8)
         block_len = draft_block.shape[1]
 
-        target_outputs = target_model(input_ids=speculative_ids, attention_mask=speculative_mask)
+        with torch.inference_mode():
+            target_outputs = target_model(
+                input_ids=speculative_ids, 
+                attention_mask=speculative_mask,
+                output_hidden_states=False,
+                output_attentions=False
+            )
         target_logits = target_outputs.logits
 
         batch_idx = torch.arange(batch_size, device=device)

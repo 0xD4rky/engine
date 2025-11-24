@@ -1,8 +1,10 @@
+from pathlib import Path
 import torch
 import yaml
 from utils.processor import Processor, GreedyProcessor
 
-config = yaml.load(open("engine/inference/confing.yaml"), Loader=yaml.FullLoader)
+_CONFIG_PATH = Path(__file__).resolve().parent / "inference" / "confing.yaml"
+config = yaml.load(open(_CONFIG_PATH, "r"), Loader=yaml.FullLoader)
 
 @torch.no_grad()
 def base_decoding_without_kv_cache(
@@ -23,7 +25,13 @@ def base_decoding_without_kv_cache(
     finished = torch.zeros(batch_size, dtype=torch.bool, device=model.device)
 
     for _ in range(max_new_tokens):
-        outputs = model(input_ids=current_sequence, attention_mask=current_mask)
+        with torch.inference_mode():
+            outputs = model(
+                input_ids=current_sequence, 
+                attention_mask=current_mask, 
+                output_hidden_states=False,
+                output_attentions=False
+            )
         logits = outputs.logits[:, -1, :]
         probs = processor(logits)
         next_token = processor.sample(probs)
