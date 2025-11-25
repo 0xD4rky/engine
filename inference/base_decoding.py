@@ -25,13 +25,12 @@ def base_decoding_without_kv_cache(
     finished = torch.zeros(batch_size, dtype=torch.bool, device=model.device)
 
     for _ in range(max_new_tokens):
-        with torch.inference_mode():
-            outputs = model(
-                input_ids=current_sequence, 
-                attention_mask=current_mask, 
-                output_hidden_states=False,
-                output_attentions=False
-            )
+        outputs = model(
+            input_ids=current_sequence, 
+            attention_mask=current_mask, 
+            output_hidden_states=False,
+            output_attentions=False
+        )
         logits = outputs.logits[:, -1, :]
         probs = processor(logits)
         next_token = processor.sample(probs)

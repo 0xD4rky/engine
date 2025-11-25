@@ -145,8 +145,9 @@ def speculative_decoding_benchmark():
     return results, metrics_log
 
 if __name__ == "__main__":
-    base_results, base_metrics = base_decoding_benchmark()
-    speculative_results, speculative_metrics = speculative_decoding_benchmark()
+    with torch.inference_mode():
+        base_results, base_metrics = base_decoding_benchmark()
+        speculative_results, speculative_metrics = speculative_decoding_benchmark()
 
     print(base_results)
     print(base_metrics)

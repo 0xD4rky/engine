@@ -68,13 +68,12 @@ def speculative_decoding_without_kv_cache(
             if not active.any():
                 break
             
-            with torch.inference_mode():
-                draft_outputs = draft_model(
-                    input_ids=speculative_ids, 
-                    attention_mask=speculative_mask, 
-                    output_hidden_states=False,
-                    output_attentions=False
-                )
+            draft_outputs = draft_model(
+                input_ids=speculative_ids, 
+                attention_mask=speculative_mask, 
+                output_hidden_states=False,
+                output_attentions=False
+            )
             draft_logits = draft_outputs.logits[:, -1, :]
             draft_probs = processor(draft_logits)
             next_token = processor.sample(draft_probs).squeeze(-1)
@@ -105,13 +104,12 @@ def speculative_decoding_without_kv_cache(
         draft_block_probs = torch.cat(draft_prob_columns, dim=1).clamp_min(1e-8)
         block_len = draft_block.shape[1]
 
-        with torch.inference_mode():
-            target_outputs = target_model(
-                input_ids=speculative_ids, 
-                attention_mask=speculative_mask,
-                output_hidden_states=False,
-                output_attentions=False
-            )
+        target_outputs = target_model(
+            input_ids=speculative_ids, 
+            attention_mask=speculative_mask,
+            output_hidden_states=False,
+            output_attentions=False
+        )
         target_logits = target_outputs.logits
 
         batch_idx = torch.arange(batch_size, device=device)
