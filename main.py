@@ -8,7 +8,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from benchmark.gsm8k import GSM8KInference
 
-
+torch.set_grad_enabled(False) # i dont need grad for inference
 def get_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
