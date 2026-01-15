@@ -6,9 +6,16 @@ import re
 import time
 import yaml
 
-from inference.base_decoding import base_decoding_without_kv_cache
-from inference.speculative_decoding import speculative_decoding_without_kv_cache
+from inference.base_decoding import (
+    base_decoding_without_kv_cache,
+    base_decoding_with_kv_cache,
+)
+from inference.speculative_decoding import (
+    speculative_decoding_without_kv_cache,
+    speculative_decoding_with_kv_cache,
+)
 from utils.processor import GreedyProcessor
+from transformers import DynamicCache
 
 _CONFIG_PATH = Path(__file__).resolve().parent.parent / "inference" / "confing.yaml"
 config = yaml.load(open(_CONFIG_PATH, "r"), Loader=yaml.FullLoader)
@@ -82,12 +89,16 @@ Answer: Let's solve this step by step:
         attn_mask = attn_mask.to(self.device, non_blocking=True)
 
         start_time = time.time()
-        
-        _ = self.target_model(input_ids=input_ids, attention_mask=attn_mask)
+
+        # KV cache version does prefill internally, so we measure TTFT as prefill time
+        # by timing a single forward pass (this approximates the prefill phase)
+        with torch.no_grad():
+            outputs = self.target_model(input_ids=input_ids, attention_mask=attn_mask)
         first_token_time = time.time()
         ttft = first_token_time - start_time
 
-        output_ids = base_decoding_without_kv_cache(
+        # Now run actual generation (will re-prefill, but this gives accurate TTFT measurement)
+        output_ids = base_decoding_with_kv_cache(
             self.target_model,
             self.tokenizer,
             input_ids,
@@ -129,7 +140,7 @@ Answer: Let's solve this step by step:
         first_token_time = time.time()
         ttft = first_token_time - start_time
 
-        output_ids = speculative_decoding_without_kv_cache(
+        output_ids = speculative_decoding_with_kv_cache(
             target_model=self.target_model,
             draft_model=self.draft_model,
             tokenizer=self.tokenizer,

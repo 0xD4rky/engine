@@ -4,7 +4,7 @@ import yaml
 from utils.processor import Processor, GreedyProcessor
 from transformers import DynamicCache 
 
-_CONFIG_PATH = Path(__file__).resolve().parent / "inference" / "confing.yaml"
+_CONFIG_PATH = Path(__file__).resolve().parent / "confing.yaml"
 config = yaml.load(open(_CONFIG_PATH, "r"), Loader=yaml.FullLoader)
 
 @torch.no_grad()
@@ -52,28 +52,34 @@ def base_decoding_with_kv_cache(
     model,
     tokenizer,
     input_ids: torch.Tensor, # tokenized input ids
-    attn_mask: torch.Tensor, 
+    attn_mask: torch.Tensor,
     processor: Processor = GreedyProcessor(),
-    max_new_tokens: int = config["sampling_params"]["max_new_tokens"]
-) -> torch.Tensor:  
-
-    cache = DynamicCache()
+    max_new_tokens: int = config["sampling_params"]["max_new_tokens"],
+    past_key_values: DynamicCache = None,
+    prefill_logits: torch.Tensor = None,
+) -> torch.Tensor:
 
     batch_size = input_ids.shape[0]
     eos_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else None
 
     # Prefill phase: processing the entire input seq and storing kvs
-    outputs = model(
-        input_ids=input_ids,
-        attention_mask=attn_mask,
-        past_key_values=cache,
-        use_cache=True,
-        output_hidden_states=False,
-        output_attentions=False
-    )
-    cache = outputs.past_key_values
+    # Skip if cache and logits are provided from external prefill
+    if past_key_values is not None and prefill_logits is not None:
+        cache = past_key_values
+        logits = prefill_logits
+    else:
+        cache = DynamicCache()
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attn_mask,
+            past_key_values=cache,
+            use_cache=True,
+            output_hidden_states=False,
+            output_attentions=False
+        )
+        cache = outputs.past_key_values
+        logits = outputs.logits[:,-1,:]
 
-    logits = outputs.logits[:,-1,:] 
     probs = processor(logits)
     next_token = processor.sample(probs) # we need this last token only
 
@@ -124,7 +130,6 @@ def base_decoding_with_kv_cache(
 
 
         
-
 
 
 

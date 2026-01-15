@@ -4,7 +4,7 @@ import yaml
 from utils.processor import Processor, GreedyProcessor
 from transformers import DynamicCache 
 
-_CONFIG_PATH = Path(__file__).resolve().parent / "inference" / "confing.yaml"
+_CONFIG_PATH = Path(__file__).resolve().parent / "confing.yaml"
 config = yaml.load(open(_CONFIG_PATH, "r"), Loader=yaml.FullLoader)
 
 def _true_lengths(attn_mask: torch.Tensor) -> torch.Tensor:
@@ -243,7 +243,11 @@ def speculative_decoding_with_kv_cache(
     attn_mask: torch.Tensor,
     processor: Processor = GreedyProcessor(),
     max_new_tokens: int = config["sampling_params"]["max_new_tokens"],
-    gamma: int = config["speculative_params"]["max_speculative_tokens"]
+    gamma: int = config["speculative_params"]["max_speculative_tokens"],
+    draft_past_key_values: DynamicCache = None,
+    draft_prefill_logits: torch.Tensor = None,
+    target_past_key_values: DynamicCache = None,
+    target_prefill_logits: torch.Tensor = None,
 ) -> torch.Tensor:
     batch_size = input_ids.shape[0]
     device = next(target_model.parameters()).device
@@ -253,9 +257,6 @@ def speculative_decoding_with_kv_cache(
 
     draft_model.eval()
     target_model.eval()
-
-    draft_cache = DynamicCache()
-    target_cache = DynamicCache()
 
     eos_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else None
     pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
@@ -271,28 +272,38 @@ def speculative_decoding_with_kv_cache(
 
     mask_is_bool = current_mask.dtype == torch.bool
 
-    # Prefill caches with the initial prompt once
-    draft_outputs = draft_model(
-        input_ids=current_sequence,
-        attention_mask=current_mask,
-        past_key_values=draft_cache,
-        use_cache=True,
-        output_hidden_states=False,
-        output_attentions=False,
-    )
-    draft_cache = draft_outputs.past_key_values
-    draft_logits_next = draft_outputs.logits[:, -1, :]
+    # Prefill caches with the initial prompt once (skip if provided from external prefill)
+    if draft_past_key_values is not None and draft_prefill_logits is not None:
+        draft_cache = draft_past_key_values
+        draft_logits_next = draft_prefill_logits
+    else:
+        draft_cache = DynamicCache()
+        draft_outputs = draft_model(
+            input_ids=current_sequence,
+            attention_mask=current_mask,
+            past_key_values=draft_cache,
+            use_cache=True,
+            output_hidden_states=False,
+            output_attentions=False,
+        )
+        draft_cache = draft_outputs.past_key_values
+        draft_logits_next = draft_outputs.logits[:, -1, :]
 
-    target_outputs = target_model(
-        input_ids=current_sequence,
-        attention_mask=current_mask,
-        past_key_values=target_cache,
-        use_cache=True,
-        output_hidden_states=False,
-        output_attentions=False,
-    )
-    target_cache = target_outputs.past_key_values
-    target_logits_next = target_outputs.logits[:, -1, :]
+    if target_past_key_values is not None and target_prefill_logits is not None:
+        target_cache = target_past_key_values
+        target_logits_next = target_prefill_logits
+    else:
+        target_cache = DynamicCache()
+        target_outputs = target_model(
+            input_ids=current_sequence,
+            attention_mask=current_mask,
+            past_key_values=target_cache,
+            use_cache=True,
+            output_hidden_states=False,
+            output_attentions=False,
+        )
+        target_cache = target_outputs.past_key_values
+        target_logits_next = target_outputs.logits[:, -1, :]
 
     if eos_token_id is not None:
         # Mark prompts that already ended with EOS as finished
