@@ -66,12 +66,13 @@ def base_decoding_with_kv_cache(
     outputs = model(
         input_ids=input_ids,
         attention_mask=attn_mask,
+        past_key_values=cache,
         use_cache=True,
         output_hidden_states=False,
         output_attentions=False
     )
+    cache = outputs.past_key_values
 
-    past_key_values = outputs.past_key_values # kv cache
     logits = outputs.logits[:,-1,:] 
     probs = processor(logits)
     next_token = processor.sample(probs) # we need this last token only
@@ -84,7 +85,7 @@ def base_decoding_with_kv_cache(
         finished |= (next_token.squeeze(-1) == eos_token_id)
 
     #Decode phase
-    for _ in range(max_new_tokens):
+    for _ in range(max(0, max_new_tokens - 1)):
         if finished.all():
             break
 
@@ -96,6 +97,7 @@ def base_decoding_with_kv_cache(
             output_hidden_states=False,
             output_attentions=False
         )
+        cache = outputs.past_key_values
 
         logits = outputs.logits[:,-1,:] 
         probs = processor(logits)

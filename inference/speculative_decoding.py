@@ -2,6 +2,7 @@ from pathlib import Path
 import torch
 import yaml
 from utils.processor import Processor, GreedyProcessor
+from transformers import DynamicCache 
 
 _CONFIG_PATH = Path(__file__).resolve().parent / "inference" / "confing.yaml"
 config = yaml.load(open(_CONFIG_PATH, "r"), Loader=yaml.FullLoader)
@@ -209,3 +210,139 @@ def speculative_decoding_without_kv_cache(
                 finished |= eos_mask
 
     return generated_ids
+
+@torch.no_grad()
+def speculative_decoding_with_kv_cache(
+    target_model,
+    draft_model,
+    tokenizer,
+    input_ids: torch.Tensor, # tokenized input ids
+    attn_mask: torch.Tensor,
+    processor: Processor = GreedyProcessor(),
+    max_new_tokens: int = config["sampling_params"]["max_new_tokens"],
+    gamma: int = config["speculative_params"]["max_speculative_tokens"]
+) -> torch.Tensor:
+    
+    batch_size = input_ids.shape[0]
+    device = next(target_model.parameters()).device
+
+    draft_cache = DynamicCache()
+    target_cache = DynamicCache()
+
+    eos_token_id = tokenizer.eos_token_id if hasattr(tokenizer, "eos_token_id") else None
+    pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+    if pad_token_id is None:
+        pad_token_id = eos_token_id
+    
+    #Prefill phase
+    draft_outputs = draft_model(
+        input_ids=input_ids,
+        attention_mask=attn_mask,
+        past_key_values=draft_cache,
+        use_cache=True,
+        output_hidden_states=False,
+        output_attentions=False
+    )
+    draft_cache = draft_outputs.past_key_values
+    draft_logits = draft_outputs.logits[:, -1, :]
+    draft_probs = processor(draft_logits)
+    next_draft_token = processor.sample(draft_probs).squeeze(-1)
+    
+    target_outputs = target_model(
+        input_ids=input_ids,
+        attention_mask=attn_mask,
+        past_key_values=target_cache,
+        use_cache=True,
+        output_hidden_states=False,
+        output_attentions=False
+    )
+    target_cache = target_outputs.past_key_values
+    target_logits = target_outputs.logits
+    target_probs = processor(target_logits)
+    next_target_token = processor.sample(target_probs).squeeze(-1)
+
+    draft_generated_ids = next_draft_token.clone()
+    target_generated_ids = next_target_token.clone()
+    current_mask = attn_mask.clone().to(device)
+    finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
+
+    if pad_token_id is None:
+        pad_token_id = 0  # safe fall-back when tokenizer lacks pad/eos information
+
+    mask_is_bool = current_mask.dtype == torch.bool
+
+    while draft_generated_ids.shape[1] < max_new_tokens and not finished.all():
+        prev_len = _true_lengths(current_mask).long()
+        active = ~finished
+        if not active.any():
+            break
+
+        remaining = max_new_tokens - draft_generated_ids.shape[1]
+        if remaining <= 0:
+            break
+
+        step_budget = min(gamma, remaining)
+
+        draft_columns = []
+        draft_prob_columns = []
+
+        speculative_ids = []
+        speculative_mask = []
+
+        draft_model.eval()
+        target_model.eval()
+
+        for _ in range(step_budget):
+            if not active.any():
+                break
+
+            draft_outputs = draft_model(
+                input_ids=next_draft_token,
+                attention_mask=speculative_mask,
+                past_key_values=draft_cache,
+                use_cache=True,
+                output_hidden_states=False,
+                output_attentions=False
+            )
+            draft_cache = draft_outputs.past_key_values
+            draft_logits = draft_outputs.logits[:, -1, :]
+            draft_probs = processor(draft_logits)
+            next_draft_token = processor.sample(draft_probs).squeeze(-1)
+            next_draft_prob = draft_probs.gather(-1, next_draft_token.unsqueeze(-1)).squeeze(-1)
+
+            if not active.all():
+                next_draft_token = next_draft_token.clone()
+                next_draft_prob = next_draft_prob.clone()
+                next_draft_token[~active] = pad_token_id
+                next_draft_prob[~active] = 1.0
+
+            draft_columns.append(next_draft_token.unsqueeze(1))
+            draft_prob_columns.append(next_draft_prob.unsqueeze(1))
+
+            new_mask = torch.zeros((batch_size, 1), dtype=current_mask.dtype, device=device)
+            if mask_is_bool:
+                new_mask[active] = True
+            else:
+                new_mask[active] = 1
+
+            speculative_ids = _append_rows(speculative_ids, next_draft_token.unsqueeze(1))
+            speculative_mask = _append_rows(speculative_mask, new_mask)
+
+        if not draft_columns:
+            break
+
+        draft_block = torch.cat(draft_columns, dim=1)
+        draft_block_probs = torch.cat(draft_prob_columns, dim=1).clamp_min(1e-8)
+        block_len = draft_block.shape[1]
+
+        target_outputs = target_model(
+            input_ids=speculative_ids,
+            attention_mask=speculative_mask,
+            past_key_values=draft_cache,
+            use_cache=True,
+            output_hidden_states=False,
+            output_attentions=False
+        )
+        target_cache = target_outputs.past_key_values
+        
+            
