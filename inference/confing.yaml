@@ -2,15 +2,16 @@ sampling_params:
   temperature: 0.5
   top_p: 0.6
   top_k: 50
-  max_new_tokens: 1024
+  max_new_tokens: 256  # reduced from 1024 for faster iteration
   repetition_penalty: 1
 
 speculative_params:
   max_speculative_tokens: 8
   repetition_penalty: 1
+  draft_model_name: "Qwen/Qwen2.5-0.5B"  # smaller draft model for spec-dec
 
 batch_params:
-  batch_size: 16
+  batch_size: 2  # reduced from 16 for MPS
   num_workers: 4
   pin_memory: true
 
