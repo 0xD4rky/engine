@@ -22,13 +22,21 @@ config = yaml.load(open(_CONFIG_PATH, "r"), Loader=yaml.FullLoader)
 
 DEVICE = get_device()
 
+# Speed hacks
+torch.set_float32_matmul_precision('high')  # faster matmuls
+torch._dynamo.config.suppress_errors = True  # silent fallback on unsupported ops
+torch._dynamo.config.cache_size_limit = 256  # more compiled variants cached
+
 tokenizer = AutoTokenizer.from_pretrained(config["model_name"])
 tokenizer.pad_token = tokenizer.pad_token or tokenizer.eos_token
 
 target_model = AutoModelForCausalLM.from_pretrained(
     config["model_name"],
-    dtype=torch.float16
+    dtype=torch.float16,
+    attn_implementation="sdpa",
 ).to(DEVICE)
+compile_mode = "reduce-overhead" if DEVICE.type == "cuda" else "default"
+target_model = torch.compile(target_model, mode=compile_mode, fullgraph=False)
 target_model.eval()
 
 draft_model_name = config.get("speculative_params", {}).get("draft_model_name", config["model_name"])
@@ -37,8 +45,10 @@ if draft_model_name == config["model_name"]:
 else:
     draft_model = AutoModelForCausalLM.from_pretrained(
         draft_model_name,
-        dtype=torch.float16
+        dtype=torch.float16,
+        attn_implementation="sdpa",
     ).to(DEVICE)
+    draft_model = torch.compile(draft_model, mode=compile_mode, fullgraph=False)
     draft_model.eval()
 
 gsm8k_inference = GSM8KInference(

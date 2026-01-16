@@ -57,12 +57,12 @@ class GSM8KInference:
         return dataset
 
     def format_prompt(self, question: str) -> str:
-        return f"""Solve this math problem step by step:
-
-Question: {question}
-
-Answer: Let's solve this step by step:
-""" 
+        # Use Qwen's chat template for proper generation
+        messages = [
+            {"role": "system", "content": "You are a reasoning large language model developed by Ishaan. Solve problems step by step, thinking thoroughly and end with #### followed by the final numerical answer."},
+            {"role": "user", "content": question}
+        ]
+        return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True) 
 
     def extract_answer(self, text: str) -> str:
         """
