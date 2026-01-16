@@ -6,5 +6,7 @@
 - [x] base & speculative decoding (raw impl)
 - [x] batch inference
 - [x] kv-cache
-- [ ] minor pipeline optimizations
+- [ ] paged attention
 - [ ] profiling
+- [ ] pipeline improvements
+- [ ] serving mechanism
