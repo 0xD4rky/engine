@@ -90,21 +90,30 @@ Answer: Let's solve this step by step:
 
         start_time = time.time()
 
-        # KV cache version does prefill internally, so we measure TTFT as prefill time
-        # by timing a single forward pass (this approximates the prefill phase)
-        with torch.no_grad():
-            outputs = self.target_model(input_ids=input_ids, attention_mask=attn_mask)
+        # Prefill phase - compute KV cache and measure TTFT
+        cache = DynamicCache()
+        outputs = self.target_model(
+            input_ids=input_ids,
+            attention_mask=attn_mask,
+            past_key_values=cache,
+            use_cache=True,
+        )
+        prefill_cache = outputs.past_key_values
+        prefill_logits = outputs.logits[:, -1, :]
+
         first_token_time = time.time()
         ttft = first_token_time - start_time
 
-        # Now run actual generation (will re-prefill, but this gives accurate TTFT measurement)
+        # Decode phase - pass prefill outputs to avoid redundant computation
         output_ids = base_decoding_with_kv_cache(
             self.target_model,
             self.tokenizer,
             input_ids,
             attn_mask,
             processor=self.processor,
-            max_new_tokens=max_new_tokens
+            max_new_tokens=max_new_tokens,
+            past_key_values=prefill_cache,
+            prefill_logits=prefill_logits,
         )
         
         end_time = time.time()
@@ -136,10 +145,32 @@ Answer: Let's solve this step by step:
         attn_mask = attn_mask.to(self.device, non_blocking=True)
 
         start_time = time.time()
-        _ = self.draft_model(input_ids=input_ids, attention_mask=attn_mask)
+
+        # Prefill both draft and target models, measure TTFT from draft (faster)
+        draft_cache = DynamicCache()
+        draft_outputs = self.draft_model(
+            input_ids=input_ids,
+            attention_mask=attn_mask,
+            past_key_values=draft_cache,
+            use_cache=True,
+        )
+        draft_prefill_cache = draft_outputs.past_key_values
+        draft_prefill_logits = draft_outputs.logits[:, -1, :]
+
         first_token_time = time.time()
         ttft = first_token_time - start_time
 
+        target_cache = DynamicCache()
+        target_outputs = self.target_model(
+            input_ids=input_ids,
+            attention_mask=attn_mask,
+            past_key_values=target_cache,
+            use_cache=True,
+        )
+        target_prefill_cache = target_outputs.past_key_values
+        target_prefill_logits = target_outputs.logits[:, -1, :]
+
+        # Decode phase - pass prefill outputs to avoid redundant computation
         output_ids = speculative_decoding_with_kv_cache(
             target_model=self.target_model,
             draft_model=self.draft_model,
@@ -148,7 +179,11 @@ Answer: Let's solve this step by step:
             attn_mask=attn_mask,
             processor=self.processor,
             max_new_tokens=max_new_tokens,
-            gamma=gamma
+            gamma=gamma,
+            draft_past_key_values=draft_prefill_cache,
+            draft_prefill_logits=draft_prefill_logits,
+            target_past_key_values=target_prefill_cache,
+            target_prefill_logits=target_prefill_logits,
         )
 
         end_time = time.time()

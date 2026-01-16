@@ -27,7 +27,7 @@ tokenizer.pad_token = tokenizer.pad_token or tokenizer.eos_token
 
 target_model = AutoModelForCausalLM.from_pretrained(
     config["model_name"],
-    torch_dtype=torch.float16
+    dtype=torch.float16
 ).to(DEVICE)
 target_model.eval()
 
@@ -37,7 +37,7 @@ if draft_model_name == config["model_name"]:
 else:
     draft_model = AutoModelForCausalLM.from_pretrained(
         draft_model_name,
-        torch_dtype=torch.float16
+        dtype=torch.float16
     ).to(DEVICE)
     draft_model.eval()
 
@@ -49,6 +49,7 @@ gsm8k_inference = GSM8KInference(
 )
 
 dataset = list(gsm8k_inference.load_gsm8k())
+dataset = dataset[:100]
 
 BATCH_SIZE = config["batch_params"]["batch_size"]
 total_batches = (len(dataset) + BATCH_SIZE - 1) // BATCH_SIZE

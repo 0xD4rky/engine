@@ -14,11 +14,10 @@ def _append_rows(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return torch.cat([x, y], dim=1) # concatenate along sequence dimension (dim=1)
 
 def _clone_dynamic_cache(cache: DynamicCache) -> DynamicCache:
-    cloned = DynamicCache()
-    cloned._seen_tokens = cache._seen_tokens
-    cloned.key_cache = [tensor.clone() for tensor in cache.key_cache]
-    cloned.value_cache = [tensor.clone() for tensor in cache.value_cache]
-    return cloned
+    # Convert to legacy format, clone tensors, convert back
+    legacy = cache.to_legacy_cache()
+    cloned_legacy = tuple((k.clone(), v.clone()) for k, v in legacy)
+    return DynamicCache.from_legacy_cache(cloned_legacy)
 
 def _forward_step(
     model,
