@@ -346,6 +346,7 @@ def speculative_decoding_with_kv_cache(
         speculative_mask = current_mask.clone()
         draft_tokens_list = []
         draft_probs_list = []
+        draft_logits_list = [draft_logits_next]
         draft_logits_step = draft_logits_next
 
         for _ in range(step_budget):
@@ -378,6 +379,7 @@ def speculative_decoding_with_kv_cache(
                 speculative_mask,
                 speculative_cache,
             )
+            draft_logits_list.append(draft_logits_step)
 
         if not draft_tokens_list:
             break
@@ -393,12 +395,13 @@ def speculative_decoding_with_kv_cache(
             verify_mask_extension[active] = 1
         verify_mask = _append_rows(current_mask, verify_mask_extension)
 
-        verify_cache = _clone_dynamic_cache(target_cache)
+        original_cache_len = _get_cache_seq_len(target_cache)
+
         verify_cache, verify_logits = _multi_token_forward(
             target_model,
             draft_block,
             verify_mask,
-            verify_cache,
+            _clone_dynamic_cache(target_cache),
         )
 
         all_verify_logits = torch.cat([
@@ -465,9 +468,6 @@ def speculative_decoding_with_kv_cache(
 
         min_common = tokens_to_add.min().item()
 
-        target_all_logits = None
-        draft_all_logits = None
-
         if min_common > 0:
             common_block = draft_block[:, :min_common]
             common_mask_ext = torch.zeros((batch_size, min_common), dtype=current_mask.dtype, device=device)
@@ -479,18 +479,9 @@ def speculative_decoding_with_kv_cache(
             current_sequence = _append_rows(current_sequence, common_block)
             generated_ids = _append_rows(generated_ids, common_block)
 
-            target_cache, target_all_logits = _multi_token_forward(
-                target_model,
-                common_block,
-                current_mask,
-                target_cache,
-            )
-            draft_cache, draft_all_logits = _multi_token_forward(
-                draft_model,
-                common_block,
-                current_mask,
-                draft_cache,
-            )
+            target_cache = _truncate_cache(verify_cache, original_cache_len + min_common)
+            speculative_cache = _truncate_cache(speculative_cache, original_cache_len + min_common)
+            draft_cache = speculative_cache
 
             if eos_token_id is not None:
                 for pos in range(min_common):
@@ -499,8 +490,8 @@ def speculative_decoding_with_kv_cache(
                     finished |= eos_hit
 
         max_total = total_tokens_per_seq.max().item()
-        target_logits_step = target_all_logits[:, -1, :] if target_all_logits is not None else target_logits_next
-        draft_logits_step = draft_all_logits[:, -1, :] if draft_all_logits is not None else draft_logits_next
+        target_logits_step = verify_logits[:, min_common - 1, :] if min_common > 0 else target_logits_next
+        draft_logits_step = draft_logits_list[min_common] if min_common > 0 else draft_logits_next
 
         for pos in range(min_common, max_total):
             active_for_pos = (total_tokens_per_seq > pos) & (~finished)
