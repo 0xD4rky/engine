@@ -160,7 +160,7 @@ if __name__ == "__main__":
         base_results, base_metrics = base_decoding_benchmark()
         speculative_results, speculative_metrics = speculative_decoding_benchmark()
 
-    print(base_results)
+    print(f"base decoding result: {base_results[0]}")
     print(base_metrics)
-    print(speculative_results)
+    print(f"spec decoding result: {speculative_results[0]}")
     print(speculative_metrics)
